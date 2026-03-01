@@ -1,6 +1,14 @@
 # Ceiling Flights
 
+This project was vibe coded by a beginner using ChatGPT Codex.
+
 Debug-first Electron app for map-aligned overhead flight plotting.
+
+## About Me
+
+- Builder: Raj (`@Raj-R1`)
+- Background: beginner developer, learning by building real projects end-to-end
+- Goal for this app: an ambient ceiling projection of nearby flights with a clean, low-distraction UI
 
 ## Current Features
 
@@ -59,3 +67,7 @@ CEILING_FLIGHTS_OPEN_DEVTOOLS=1 pnpm dev
 - `preload` exposes a narrow typed bridge (`window.ceilingFlights`).
 - React renderer owns map rendering, state, and UI animations.
 - Flight interpolation runs in renderer and caps visible aircraft for performance.
+
+## Design System
+
+- Canonical UI/motion/color guide: [docs/design-guide.md](./docs/design-guide.md)
