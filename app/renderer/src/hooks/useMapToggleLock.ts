@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { AppSettings } from '../../../shared/types';
+import { debugLog } from '../services/debugLog';
+import {
+  acknowledgeMapVisibility,
+  idleMapToggleLockState,
+  markMapToggleMinLockElapsed,
+  shouldReleaseMapToggleLock,
+  type MapToggleLockState
+} from '../services/mapToggleLockMachine';
 
 const DEFAULT_MIN_LOCK_MS = 1000;
 const DEFAULT_MAX_WAIT_MS = 4000;
@@ -22,9 +30,7 @@ export const useMapToggleLock = ({
   const showMapRef = useRef(showMap);
   const minLockTimerRef = useRef<number | null>(null);
   const maxWaitTimerRef = useRef<number | null>(null);
-  // acked=true means map layer update callback confirmed visibility change.
-  const ackedRef = useRef(false);
-  const minLockElapsedRef = useRef(false);
+  const lockStateRef = useRef<MapToggleLockState>(idleMapToggleLockState());
 
   useEffect(() => {
     showMapRef.current = showMap;
@@ -39,8 +45,7 @@ export const useMapToggleLock = ({
       window.clearTimeout(maxWaitTimerRef.current);
       maxWaitTimerRef.current = null;
     }
-    ackedRef.current = false;
-    minLockElapsedRef.current = false;
+    lockStateRef.current = idleMapToggleLockState();
     setIsMapTogglePending(false);
   }, []);
 
@@ -50,11 +55,19 @@ export const useMapToggleLock = ({
     };
   }, [clearPending]);
 
-  const startMapTogglePending = useCallback(() => {
-    if (isMapTogglePending) return;
+  const startMapTogglePending = useCallback((nextShowMap?: boolean) => {
+    if (lockStateRef.current.pending) return;
+    const currentShowMap = showMapRef.current;
+    const targetShowMap = typeof nextShowMap === 'boolean' ? nextShowMap : !currentShowMap;
+    if (targetShowMap === currentShowMap) return;
+
     setIsMapTogglePending(true);
-    ackedRef.current = false;
-    minLockElapsedRef.current = false;
+    lockStateRef.current = {
+      pending: true,
+      targetShowMap,
+      acked: false,
+      minLockElapsed: false
+    };
 
     if (minLockTimerRef.current !== null) {
       window.clearTimeout(minLockTimerRef.current);
@@ -64,26 +77,29 @@ export const useMapToggleLock = ({
     }
 
     minLockTimerRef.current = window.setTimeout(() => {
-      minLockElapsedRef.current = true;
+      lockStateRef.current = markMapToggleMinLockElapsed(lockStateRef.current);
       minLockTimerRef.current = null;
-      if (ackedRef.current) {
+      if (shouldReleaseMapToggleLock(lockStateRef.current)) {
         clearPending();
       }
     }, minLockMs);
 
     maxWaitTimerRef.current = window.setTimeout(() => {
+      debugLog('ui', 'Map toggle lock timed out before map visibility ack', {
+        showMap: showMapRef.current,
+        targetShowMap: lockStateRef.current.targetShowMap,
+        lockState: lockStateRef.current
+      });
       clearPending();
     }, maxWaitMs);
 
-    setSettings((prev) => ({ ...prev, showMap: !prev.showMap }));
-  }, [clearPending, isMapTogglePending, maxWaitMs, minLockMs, setSettings]);
+    setSettings((prev) => ({ ...prev, showMap: targetShowMap }));
+  }, [clearPending, maxWaitMs, minLockMs, setSettings]);
 
   const onMapVisibilityApplied = useCallback(
     (appliedShowMap: boolean) => {
-      // Ignore unrelated map events while lock is tracking a specific target state.
-      if (appliedShowMap !== showMapRef.current) return;
-      ackedRef.current = true;
-      if (minLockElapsedRef.current) {
+      lockStateRef.current = acknowledgeMapVisibility(lockStateRef.current, appliedShowMap);
+      if (shouldReleaseMapToggleLock(lockStateRef.current)) {
         clearPending();
       }
     },

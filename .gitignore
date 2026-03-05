@@ -23,3 +23,6 @@ pnpm-debug.log*
 
 # Codex local metadata
 .codex/
+
+*storybook.log
+storybook-static

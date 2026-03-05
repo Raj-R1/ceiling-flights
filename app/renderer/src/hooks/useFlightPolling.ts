@@ -39,22 +39,29 @@ export const useFlightPolling = ({
   maxVisibleFlights: number;
 }) => {
   const [snapshot, setSnapshot] = useState<AircraftSnapshot[]>([]);
-  const [connectionState, setConnectionState] = useState<ConnectionState>({ offline: false });
+  const [connectionState, setConnectionState] = useState<ConnectionState>({ offline: false, refreshing: true });
 
   useEffect(() => {
     // Poll from a fixed center for each hook lifecycle; restarting effect changes the center.
     const homeAtStart = { lat: home.lat, lon: home.lon };
+    setConnectionState((prev) => ({
+      offline: false,
+      refreshing: true,
+      lastSuccessMs: prev.lastSuccessMs
+    }));
+
     const provider = new AdsbLolProvider();
     const poller = new FlightPoller(provider, {
       onData: (nextSnapshot) => {
         setSnapshot(limitFlights(nextSnapshot, homeAtStart, maxVisibleFlights));
       },
       onSuccess: () => {
-        setConnectionState({ offline: false, lastSuccessMs: Date.now() });
+        setConnectionState({ offline: false, refreshing: false, lastSuccessMs: Date.now() });
       },
       onError: (error) => {
         setConnectionState((prev) => ({
           offline: true,
+          refreshing: false,
           lastError: error.message,
           lastSuccessMs: prev.lastSuccessMs
         }));

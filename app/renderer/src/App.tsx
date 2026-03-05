@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Box, Transition } from '@mantine/core';
 import { DEFAULT_SETTINGS } from '../../shared/defaults';
 import type { RendererApi } from '../../shared/ipc';
-import { SettingsOverlay } from './components/SettingsOverlay';
 import { FlightMap } from './components/FlightMap';
+import { StatusPill } from './components/StatusPill';
+import { ControlPanel } from './components/ControlPanel';
 import { useStartupSettings } from './hooks/useStartupSettings';
 import { useMapToggleLock } from './hooks/useMapToggleLock';
 import { useFlightPolling } from './hooks/useFlightPolling';
@@ -25,9 +27,9 @@ const fallbackApi: RendererApi = {
 };
 
 export default function App() {
-  const [showSettings, setShowSettings] = useState(true);
+  const [showPanel, setShowPanel] = useState(true);
   const [introVisible, setIntroVisible] = useState(false);
-  const [panelStartupActive, setPanelStartupActive] = useState(true);
+  const [isLocationSnapshotPending, setLocationSnapshotPending] = useState(true);
 
   const api = window.ceilingFlights ?? fallbackApi;
 
@@ -38,7 +40,6 @@ export default function App() {
     isFullscreen,
     hasBootstrapped,
     locateStatus,
-    runAutoLocate,
     toggleFullscreen
   } = useStartupSettings(api);
 
@@ -56,78 +57,133 @@ export default function App() {
     maxVisibleFlights: MAX_VISIBLE_FLIGHTS
   });
 
+  // Keep status in "refreshing" while a new location is awaiting first rendered snapshot.
   useEffect(() => {
-    // Run one-time startup animation phases independently from manual panel toggles.
-    const revealId = window.setTimeout(() => {
-      setIntroVisible(true);
-    }, 240);
-    const doneId = window.setTimeout(() => {
-      setPanelStartupActive(false);
-    }, 1800);
-    return () => {
-      window.clearTimeout(revealId);
-      window.clearTimeout(doneId);
-    };
+    setLocationSnapshotPending(true);
+  }, [settings.home.lat, settings.home.lon]);
+
+  const effectiveConnectionState = useMemo(
+    () => ({
+      ...connectionState,
+      refreshing: connectionState.refreshing || isLocationSnapshotPending
+    }),
+    [connectionState, isLocationSnapshotPending]
+  );
+
+  // One-time intro fade-in after bootstrap.
+  useEffect(() => {
+    const id = window.setTimeout(() => setIntroVisible(true), 240);
+    return () => window.clearTimeout(id);
   }, []);
 
+  // Global keyboard shortcuts.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === 's') {
-        setShowSettings((prev) => !prev);
+      if (event.repeat) return;
+      const key = event.key.toLowerCase();
+      if (key !== 'm' && key !== 'f' && key !== 's') return;
+
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement &&
+        (activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA' ||
+          activeElement.tagName === 'SELECT' ||
+          activeElement.isContentEditable)
+      ) {
+        return;
       }
-      if (event.key.toLowerCase() === 'm') {
+
+      event.preventDefault();
+      event.stopPropagation();
+      if (activeElement instanceof HTMLElement && activeElement !== document.body) {
+        activeElement.blur();
+      }
+
+      if (key === 'm') {
+        debugLog('ui', 'Shortcut M pressed', { showMap: settings.showMap, pending: isMapTogglePending });
         startMapTogglePending();
-      }
-      if (event.key.toLowerCase() === 'f') {
+      } else if (key === 'f') {
+        debugLog('ui', 'Shortcut F pressed', { isFullscreen });
         void toggleFullscreen();
+      } else if (key === 's') {
+        debugLog('ui', 'Shortcut S pressed', { showPanel });
+        setShowPanel((prev) => !prev);
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [startMapTogglePending, toggleFullscreen]);
+  }, [isFullscreen, isMapTogglePending, settings.showMap, showPanel, startMapTogglePending, toggleFullscreen]);
 
-  useEffect(() => {
-    debugLog('ui', 'Panel visibility changed', { visible: showSettings, panelStartupActive });
-  }, [panelStartupActive, showSettings]);
+  // Derive a human-readable location label for the status pill.
+  const locationLabel = useMemo(() => {
+    if (settings.locationMode === 'random' && locateStatus.text.startsWith('Random city:')) {
+      return locateStatus.text.replace('Random city: ', '');
+    }
+    return `${settings.home.lat.toFixed(3)}°, ${settings.home.lon.toFixed(3)}°`;
+  }, [locateStatus.text, settings.home.lat, settings.home.lon, settings.locationMode]);
 
   return (
-    <main className="app-shell">
-      {/* Render map only after settings load so initial center/zoom are consistent. */}
-      {hasBootstrapped ? (
-        <FlightMap
-          home={settings.home}
-          zoom={settings.zoom}
-          snapshot={snapshot}
-          pollMs={POLL_MS}
-          showMap={settings.showMap}
-          introVisible={introVisible}
-          onMapVisibilityApplied={onMapVisibilityApplied}
-        />
-      ) : (
-        <div className={`map-placeholder ${introVisible ? 'intro-visible' : 'intro-hidden'}`} />
-      )}
-      <SettingsOverlay
+    <Box component="main" w="100%" h="100%" pos="relative" bg="#0a0b0d">
+      {/* Map layer — rendered only after settings load so center/zoom are consistent. */}
+      <Box w="100%" h="100%">
+        {hasBootstrapped ? (
+          <>
+            <Transition
+              mounted={introVisible}
+              transition="fade"
+              duration={620}
+              timingFunction="cubic-bezier(0.2, 0.7, 0, 1)"
+            >
+              {(styles) => (
+                <Box w="100%" h="100%" style={styles}>
+                  <FlightMap
+                    home={settings.home}
+                    zoom={settings.zoom}
+                    snapshot={snapshot}
+                    pollMs={POLL_MS}
+                    showMap={settings.showMap}
+                    onMapVisibilityApplied={onMapVisibilityApplied}
+                    onSnapshotRendered={() => setLocationSnapshotPending(false)}
+                  />
+                </Box>
+              )}
+            </Transition>
+            {!introVisible ? <Box w="100%" h="100%" bg="#0a0b0d" /> : null}
+          </>
+        ) : (
+          <Box w="100%" h="100%" bg="#0a0b0d" />
+        )}
+      </Box>
+
+      {/* Settings panel — slides in from top-left. */}
+      <ControlPanel
+        visible={showPanel}
         settings={settings}
-        visible={showSettings}
-        isFullscreen={isFullscreen}
-        isMapTogglePending={isMapTogglePending}
-        startupPhase={panelStartupActive ? (introVisible ? 'visible' : 'hidden') : 'done'}
-        onSettingsChange={setSettings}
-        onLocationModeChange={setLocationMode}
-        onToggleSettings={() => setShowSettings((prev) => !prev)}
-        onToggleMap={startMapTogglePending}
         locateStatus={locateStatus}
-        onLocate={() => {
-          void runAutoLocate();
-        }}
-        onToggleFullscreen={() => {
-          void toggleFullscreen();
-        }}
+        isMapTogglePending={isMapTogglePending}
+        isFullscreen={isFullscreen}
+        connectionState={effectiveConnectionState}
+        onHide={() => setShowPanel(false)}
+        onToggleMap={startMapTogglePending}
+        onToggleFullscreen={() => void toggleFullscreen()}
+        onLocationModeChange={setLocationMode}
+        onZoomChange={(zoom) => setSettings((prev) => ({ ...prev, zoom }))}
+        onManualLocationApply={(nextHome) =>
+          setSettings((prev) => ({ ...prev, locationMode: 'manual', home: nextHome }))
+        }
       />
-      {connectionState.offline ? <div className="status">Offline: using last snapshot</div> : null}
-      {/* Shortcuts hint is intentionally hidden when panel is hidden for ambient mode. */}
-      {showSettings ? <div className="hint">Shortcuts: S panel • M map • F fullscreen</div> : null}
-    </main>
+
+      {showPanel ? (
+        <StatusPill
+          connectionState={effectiveConnectionState}
+          aircraftCount={snapshot.length}
+          locationLabel={locationLabel}
+          panelVisible={showPanel}
+          onTogglePanel={() => setShowPanel((prev) => !prev)}
+        />
+      ) : null}
+    </Box>
   );
 }

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ConnectionState } from '../shared/types';
 
-const onSuccess = (): ConnectionState => ({ offline: false, lastSuccessMs: Date.now() });
+const onSuccess = (): ConnectionState => ({ offline: false, refreshing: false, lastSuccessMs: Date.now() });
 
 const onError = (prev: ConnectionState, message: string): ConnectionState => ({
   offline: true,
+  refreshing: false,
   lastError: message,
   lastSuccessMs: prev.lastSuccessMs
 });

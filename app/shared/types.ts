@@ -43,6 +43,7 @@ export type AppSettings = {
 
 export type ConnectionState = {
   offline: boolean;
+  refreshing: boolean;
   lastSuccessMs?: number;
   lastError?: string;
 };

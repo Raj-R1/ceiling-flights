@@ -56,8 +56,10 @@ const createWindow = async (): Promise<void> => {
     // Mirror renderer logs into main diagnostics so packaged builds keep traceability.
     appendRendererLog(`level=${level} line=${lineNumber} source=${sourceId ?? ''} message=${message}`);
     const isWarnOrError = level === 'warning' || level === 'error';
-    if (isWarnOrError || message.includes('[location]') || message.includes('[startup]') || message.includes('[ui]')) {
+    if (isWarnOrError) {
       console.error('Renderer console', { level, message, line: lineNumber, sourceId });
+    } else if (message.includes('[location]') || message.includes('[startup]') || message.includes('[ui]') || message.includes('[runtime]')) {
+      console.log('Renderer console', { level, message, line: lineNumber, sourceId });
     }
   });
 };

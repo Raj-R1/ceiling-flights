@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
+import { Box } from '@mantine/core';
 import { Map as MapLibreMap, setWorkerUrl } from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-dist/maplibre-gl-csp-worker.js?url';
 import type { AircraftSnapshot, GeoPoint } from '../../../shared/types';
 import { applySnapshot, buildFeatureCollection, type FlightTrackMap } from '../services/flightState';
+import { basemapVisibilityMatches, getBasemapLayerIds } from '../services/mapVisibilitySync';
 
 type Props = {
   home: GeoPoint;
@@ -10,41 +12,65 @@ type Props = {
   snapshot: AircraftSnapshot[];
   pollMs: number;
   showMap: boolean;
-  introVisible: boolean;
   onMapVisibilityApplied?: (appliedShowMap: boolean) => void;
+  onSnapshotRendered?: () => void;
 };
 
 const SOURCE_ID = 'flights';
 const CIRCLE_LAYER_ID = 'flights-circle';
 const LABEL_LAYER_ID = 'flights-label';
+const VISIBILITY_SYNC_RAF_WINDOW_MS = 500;
+const VISIBILITY_SYNC_RETRY_MS = 100;
+const VISIBILITY_SYNC_MAX_WAIT_MS = 4000;
 let workerConfigured = false;
 
 type GeoJSONSourceLike = {
   setData: (data: unknown) => void;
 };
 
-const isFlightLayer = (id: string): boolean => id === CIRCLE_LAYER_ID || id === LABEL_LAYER_ID;
-
 const applyBasemapVisibility = (map: MapLibreMap, showMap: boolean): void => {
   const layers = map.getStyle?.()?.layers ?? [];
-  for (const layer of layers) {
-    if (!layer?.id || isFlightLayer(layer.id)) continue;
-    map.setLayoutProperty?.(layer.id, 'visibility', showMap ? 'visible' : 'none');
+  for (const layerId of getBasemapLayerIds(layers)) {
+    map.setLayoutProperty?.(layerId, 'visibility', showMap ? 'visible' : 'none');
   }
 };
 
-export function FlightMap({ home, zoom, snapshot, pollMs, showMap, introVisible, onMapVisibilityApplied }: Props) {
+const isBasemapVisibilityApplied = (map: MapLibreMap, showMap: boolean): boolean => {
+  const layers = map.getStyle?.()?.layers ?? [];
+  return basemapVisibilityMatches(
+    layers,
+    showMap,
+    (layerId) => map.getLayoutProperty?.(layerId, 'visibility') as string | null | undefined
+  );
+};
+
+export function FlightMap({
+  home,
+  zoom,
+  snapshot,
+  pollMs,
+  showMap,
+  onMapVisibilityApplied,
+  onSnapshotRendered
+}: Props) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const tracksRef = useRef<FlightTrackMap>(new Map());
   const rafRef = useRef<number | null>(null);
-  const showMapRef = useRef(showMap);
+  const visibilitySyncRafRef = useRef<number | null>(null);
+  const visibilitySyncTimerRef = useRef<number | null>(null);
+  const visibilitySyncTokenRef = useRef(0);
+  const desiredShowMapRef = useRef(showMap);
   const homeRef = useRef(home);
   const zoomRef = useRef(zoom);
   const onMapVisibilityAppliedRef = useRef(onMapVisibilityApplied);
+  const onSnapshotRenderedRef = useRef(onSnapshotRendered);
+  // Stable ref to the sync function created inside the map-init closure.
+  // Allows the showMap effect to trigger the same sync without duplicating logic.
+  const syncFnRef = useRef<((reason: string) => void) | null>(null);
 
   useEffect(() => {
-    showMapRef.current = showMap;
+    desiredShowMapRef.current = showMap;
   }, [showMap]);
 
   useEffect(() => {
@@ -60,15 +86,73 @@ export function FlightMap({ home, zoom, snapshot, pollMs, showMap, introVisible,
   }, [onMapVisibilityApplied]);
 
   useEffect(() => {
+    onSnapshotRenderedRef.current = onSnapshotRendered;
+  }, [onSnapshotRendered]);
+
+  // Map init — runs once. Creates the map, wires events, and stores syncFnRef.
+  useEffect(() => {
     const node = mapNodeRef.current;
     if (!node) return;
     let map: MapLibreMap | null = null;
     let disposed = false;
 
+    const clearVisibilitySyncHandles = () => {
+      if (visibilitySyncRafRef.current !== null) {
+        cancelAnimationFrame(visibilitySyncRafRef.current);
+        visibilitySyncRafRef.current = null;
+      }
+      if (visibilitySyncTimerRef.current !== null) {
+        window.clearTimeout(visibilitySyncTimerRef.current);
+        visibilitySyncTimerRef.current = null;
+      }
+    };
+
+    const syncBasemapVisibility = (reason: string) => {
+      const syncToken = ++visibilitySyncTokenRef.current;
+      clearVisibilitySyncHandles();
+      const startedAtMs = Date.now();
+
+      const attempt = () => {
+        if (disposed || syncToken !== visibilitySyncTokenRef.current) return;
+        const currentMap = mapRef.current;
+        if (!currentMap) return;
+
+        const elapsedMs = Date.now() - startedAtMs;
+        const desiredShowMap = desiredShowMapRef.current;
+        const styleLoaded = currentMap.isStyleLoaded();
+
+        if (styleLoaded) {
+          applyBasemapVisibility(currentMap, desiredShowMap);
+        }
+
+        if (styleLoaded && isBasemapVisibilityApplied(currentMap, desiredShowMap)) {
+          onMapVisibilityAppliedRef.current?.(desiredShowMap);
+          clearVisibilitySyncHandles();
+          return;
+        }
+
+        if (elapsedMs >= VISIBILITY_SYNC_MAX_WAIT_MS) {
+          console.warn('Map visibility sync timed out', { reason, desiredShowMap, elapsedMs });
+          clearVisibilitySyncHandles();
+          return;
+        }
+
+        if (elapsedMs <= VISIBILITY_SYNC_RAF_WINDOW_MS) {
+          visibilitySyncRafRef.current = requestAnimationFrame(attempt);
+          return;
+        }
+
+        visibilitySyncTimerRef.current = window.setTimeout(attempt, VISIBILITY_SYNC_RETRY_MS);
+      };
+
+      attempt();
+    };
+
+    syncFnRef.current = syncBasemapVisibility;
+
     const setup = () => {
       if (disposed) return;
       if (!workerConfigured) {
-        // MapLibre CSP worker path must be configured once per runtime.
         setWorkerUrl(maplibreWorkerUrl);
         workerConfigured = true;
       }
@@ -89,7 +173,6 @@ export function FlightMap({ home, zoom, snapshot, pollMs, showMap, introVisible,
 
       map.on('load', () => {
         if (!map) return;
-        // Flights are rendered as a dedicated GeoJSON source+layers so map toggling can hide basemap only.
         map.addSource(SOURCE_ID, {
           type: 'geojson',
           data: { type: 'FeatureCollection', features: [] }
@@ -124,20 +207,38 @@ export function FlightMap({ home, zoom, snapshot, pollMs, showMap, introVisible,
           }
         });
 
-        applyBasemapVisibility(map, showMapRef.current);
-        onMapVisibilityAppliedRef.current?.(showMapRef.current);
+        syncBasemapVisibility('load');
       });
 
       map.on('styledata', () => {
         if (!map) return;
-        applyBasemapVisibility(map, showMapRef.current);
-        onMapVisibilityAppliedRef.current?.(showMapRef.current);
+        syncBasemapVisibility('styledata');
+      });
+
+      map.on('idle', () => {
+        if (!map) return;
+        syncBasemapVisibility('idle');
       });
 
       map.on('error', (event) => {
         const anyEvent = event as unknown as { error?: { message?: string }; sourceId?: string };
         const message = anyEvent.error?.message || 'Unknown map error';
         console.error(`MapLibre error: ${message}`, anyEvent.sourceId ? { sourceId: anyEvent.sourceId } : {});
+      });
+
+      const onViewportChanged = () => {
+        if (!mapRef.current) return;
+        mapRef.current.resize();
+        syncBasemapVisibility('viewport-change');
+      };
+
+      window.addEventListener('resize', onViewportChanged);
+      document.addEventListener('fullscreenchange', onViewportChanged);
+      map.on('resize', () => syncBasemapVisibility('map-resize'));
+
+      map.once('remove', () => {
+        window.removeEventListener('resize', onViewportChanged);
+        document.removeEventListener('fullscreenchange', onViewportChanged);
       });
     };
 
@@ -146,34 +247,23 @@ export function FlightMap({ home, zoom, snapshot, pollMs, showMap, introVisible,
 
     return () => {
       disposed = true;
+      syncFnRef.current = null;
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
+      clearVisibilitySyncHandles();
       map?.remove();
       mapRef.current = null;
       tracks.clear();
     };
   }, []);
 
+  // Trigger visibility sync whenever showMap prop changes.
+  // desiredShowMapRef is updated in its own effect (declared above) which runs first.
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    if (map.isStyleLoaded()) {
-      applyBasemapVisibility(map, showMap);
-      onMapVisibilityApplied?.(showMap);
-      return;
-    }
-
-    const id = requestAnimationFrame(() => {
-      const next = mapRef.current;
-      if (!next || !next.isStyleLoaded()) return;
-      applyBasemapVisibility(next, showMap);
-      onMapVisibilityApplied?.(showMap);
-    });
-    return () => cancelAnimationFrame(id);
-  }, [showMap, onMapVisibilityApplied]);
+    syncFnRef.current?.('showMap-prop-change');
+  }, [showMap]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -190,6 +280,7 @@ export function FlightMap({ home, zoom, snapshot, pollMs, showMap, introVisible,
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
+    let didNotifySnapshotRendered = false;
 
     applySnapshot(tracksRef.current, snapshot, Date.now());
 
@@ -202,6 +293,10 @@ export function FlightMap({ home, zoom, snapshot, pollMs, showMap, introVisible,
 
       const nowMs = Date.now();
       source.setData(buildFeatureCollection(tracksRef.current, nowMs, pollMs));
+      if (!didNotifySnapshotRendered) {
+        didNotifySnapshotRendered = true;
+        onSnapshotRenderedRef.current?.();
+      }
 
       const animating = [...tracksRef.current.values()].some((track) => nowMs - track.updatedAtMs < pollMs);
       if (animating) {
@@ -217,5 +312,5 @@ export function FlightMap({ home, zoom, snapshot, pollMs, showMap, introVisible,
     rafRef.current = requestAnimationFrame(render);
   }, [snapshot, pollMs]);
 
-  return <div ref={mapNodeRef} className={`map-canvas ${introVisible ? 'intro-visible' : 'intro-hidden'}`} />;
+  return <Box ref={mapNodeRef} w="100%" h="100%" />;
 }
