@@ -51,3 +51,7 @@ CEILING_FLIGHTS_OPEN_DEVTOOLS=1 pnpm dev
 ## Notes
 
 - `IP` mode accuracy depends on ISP, VPN, and proxy routing.
+
+## About
+
+Built by [Raj](https://github.com/Raj-R1) — vibe coded with ChatGPT Codex and Claude.
