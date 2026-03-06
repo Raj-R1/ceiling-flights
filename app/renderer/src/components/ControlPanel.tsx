@@ -223,7 +223,7 @@ export function ControlPanel({
                       checked={settings.showMap}
                       onChange={(event) => onToggleMap(event.currentTarget.checked)}
                       disabled={isMapTogglePending}
-                      color="gray.2"
+                      color="green"
                       withThumbIndicator={false}
                       size="md"
                       aria-label="Toggle map tile visibility"
@@ -242,10 +242,26 @@ export function ControlPanel({
                     max={ZOOM_MAX}
                     step={1}
                     marks={ZOOM_MARKS}
-                    color="gray.3"
+                    color="white"
                     size="sm"
+                    thumbSize={18}
                     radius="xl"
                     label={null}
+                    thumbChildren={
+                      <Box
+                        w={6}
+                        h={6}
+                        style={{
+                          borderRadius: '50%',
+                          background: '#ffffff',
+                          boxShadow: '0 0 0 1px rgba(0,0,0,0.18)'
+                        }}
+                      />
+                    }
+                    styles={{
+                      bar: { background: '#ffffff' },
+                      thumb: { display: 'flex', alignItems: 'center', justifyContent: 'center' }
+                    }}
                     aria-label="Zoom"
                   />
                 </Stack>
