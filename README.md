@@ -1,42 +1,32 @@
 # Ceiling Flights
 
-This project was vibe coded by a beginner using ChatGPT Codex.
+Ambient flight tracker for ceiling projectors — real-time ADS-B aircraft rendered on a dark vector map.
 
-Debug-first Electron app for map-aligned overhead flight plotting.
+## Features
 
-## About Me
-
-- Builder: Raj (`@Raj-R1`)
-- Background: beginner developer, learning by building real projects end-to-end
-- Goal for this app: an ambient ceiling projection of nearby flights with a clean, low-distraction UI
-
-## Current Features
-
-- Electron + React + MapLibre GL
-- Smooth vector basemap (non-interactive debug mode)
-- Flights fetched through Electron main process (no renderer CORS issues)
-- Dot per aircraft with debug flight name above marker
-- On-demand location modes: `Random`, `IP`, and `Manual`
-- Lat/lon + zoom persisted on-device
-- Fullscreen toggle + glass-style minimal settings overlay
-- Cross-platform runtime path (no macOS/Windows/Linux-specific location code)
+- Electron + React + MapLibre GL with smooth lerp animation
+- Live ADS-B data via [adsb.lol](https://adsb.lol) (fetched in main process, no CORS)
+- Location modes: `Random`, `IP`, and `Manual` with persisted settings
+- Glass-panel control overlay with keyboard shortcuts (`S` / `M` / `F`)
+- Fullscreen toggle, configurable zoom, map tile on/off
+- Cross-platform: macOS, Windows, Linux
 
 ## Quick start
 
 ```bash
-bash ./scripts/setup-mac.sh
+pnpm install
 pnpm dev
 ```
 
-## Build and verify
+## Commands
 
 ```bash
-pnpm lint
-pnpm test
-pnpm build
+pnpm lint       # ESLint
+pnpm test       # Vitest
+pnpm build      # Production build
 ```
 
-## Packaging targets
+## Packaging
 
 ```bash
 pnpm package:mac
@@ -44,30 +34,20 @@ pnpm package:win
 pnpm package:linux
 ```
 
-## Dev mode behavior
+## DevTools
 
-- DevTools are now opt-in in development.
-- To open them automatically, run:
+DevTools are opt-in in development:
 
 ```bash
 CEILING_FLIGHTS_OPEN_DEVTOOLS=1 pnpm dev
 ```
 
-## Known Limitations
-
-- `IP` mode is network-based and can vary by ISP, VPN, and proxy routing.
-- Trails are intentionally deferred in this cleanup phase.
-
 ## Architecture
 
-- Electron `main` process owns privileged operations:
-  - Settings file persistence
-  - IP geolocation provider calls
-  - ADS-B API fetches
-- `preload` exposes a narrow typed bridge (`window.ceilingFlights`).
-- React renderer owns map rendering, state, and UI animations.
-- Flight interpolation runs in renderer and caps visible aircraft for performance.
+- **main**: settings persistence, IP geolocation, ADS-B fetches
+- **preload**: narrow typed bridge (`window.ceilingFlights`)
+- **renderer**: map rendering, flight interpolation, UI (Mantine + MapLibre)
 
-## Design System
+## Notes
 
-- Canonical UI/motion/color guide: [docs/design-guide.md](./docs/design-guide.md)
+- `IP` mode accuracy depends on ISP, VPN, and proxy routing.

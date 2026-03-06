@@ -1,6 +1,4 @@
-# Ceiling Flights Design Guide (V1)
-
-This project was vibe coded by a beginner using ChatGPT Codex.
+# Ceiling Flights Design Guide
 
 ## Purpose
 
@@ -116,14 +114,10 @@ Use these as canonical values unless there is an explicit redesign.
 
 - One button = one clear verb.
 - Labels should reflect final state (for toggles, text describes resulting action).
-- Keyboard parity is mandatory: shortcut actions must exist as visible buttons.
-- Visual hierarchy:
-  - Primary workflow button spans width where applicable (`Locate`).
-  - Secondary controls grouped in equal-width rows.
+- Keyboard parity is mandatory: shortcut actions must exist as visible controls.
 - Feedback requirements:
-  - `aria-pressed` for toggles/modes.
   - Disabled state must remain readable (do not fade to near-invisible).
-  - Pending state uses gray glass, white text, and subtle inner blur.
+  - Pending state communicates via disabled + opacity.
 
 ### Spacing + Layout
 
@@ -137,10 +131,10 @@ Use these as canonical values unless there is an explicit redesign.
 ## Map + Overlay Composition
 
 - Map is always full-bleed in the background.
-- Overlay controls stay top-left.
-- Offline badge is top-right.
-- Shortcut hint is bottom-right and hidden when panel is hidden (ambient mode).
-- Map controls from MapLibre should remain hidden for this UI profile.
+- Control panel slides in from top-left; hidden when panel toggled off.
+- Status pill sits bottom-left — always visible, doubles as panel toggle.
+- Shortcuts (`S` / `M` / `F`) live inside the control panel; disappear with it in ambient mode.
+- MapLibre native controls remain hidden.
 
 ## Content Tone
 
