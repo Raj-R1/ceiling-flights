@@ -31,22 +31,8 @@ export const useStartupSettings = (api: RendererApi) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hasBootstrapped, setHasBootstrapped] = useState(false);
   const [locateStatus, setLocateStatus] = useState<LocateStatus>(LOCATE_IDLE);
-  const [isLocating, setIsLocating] = useState(false);
-  const locatingCounterRef = useRef(0);
   // Incrementing request ids let us safely ignore stale async locate responses.
   const locateRequestIdRef = useRef(0);
-
-  const beginLocate = useCallback(() => {
-    locatingCounterRef.current += 1;
-    setIsLocating(true);
-  }, []);
-
-  const endLocate = useCallback(() => {
-    locatingCounterRef.current = Math.max(0, locatingCounterRef.current - 1);
-    if (locatingCounterRef.current === 0) {
-      setIsLocating(false);
-    }
-  }, []);
 
   const getIpLocation = useCallback(async (): Promise<LocationResult> => {
     debugLog('location', 'Requesting network location');
@@ -73,7 +59,6 @@ export const useStartupSettings = (api: RendererApi) => {
 
   const locateIp = useCallback(
     async (requestId: number, reason: 'mode-select' | 'manual-refresh' = 'manual-refresh'): Promise<void> => {
-      beginLocate();
       setLocateStatus({
         tone: 'neutral',
         icon: '◎',
@@ -81,41 +66,37 @@ export const useStartupSettings = (api: RendererApi) => {
       });
       debugLog('location', 'Starting IP locate', { requestId, reason });
 
-      try {
-        const result = await getIpLocation();
+      const result = await getIpLocation();
 
-        if (requestId !== locateRequestIdRef.current) {
-          debugLog('location', 'Discarded stale locate result', { mode: 'ip', requestId, reason });
-          return;
-        }
-
-        const point = result.point;
-        if (result.ok && point) {
-          setSettings((prev) => ({ ...prev, locationMode: 'ip', home: { lat: point.lat, lon: point.lon } }));
-          setLocateStatus({
-            tone: 'success',
-            icon: '✓',
-            text: 'IP location acquired.'
-          });
-          debugLog('location', 'Locate success', {
-            mode: 'ip',
-            source: result.source,
-            requestId,
-            reason,
-            coordinates: { lat: point.lat, lon: point.lon }
-          });
-          return;
-        }
-
-        const failLabel = humanReadableLocateFailure(result);
-        setSettings((prev) => ({ ...prev, locationMode: 'ip' }));
-        setLocateStatus({ tone: 'error', icon: '✕', text: `${failLabel}. Keeping saved location.` });
-        debugLog('location', 'Locate failed', { mode: 'ip', result, requestId, reason });
-      } finally {
-        endLocate();
+      if (requestId !== locateRequestIdRef.current) {
+        debugLog('location', 'Discarded stale locate result', { mode: 'ip', requestId, reason });
+        return;
       }
+
+      const point = result.point;
+      if (result.ok && point) {
+        setSettings((prev) => ({ ...prev, locationMode: 'ip', home: { lat: point.lat, lon: point.lon } }));
+        setLocateStatus({
+          tone: 'success',
+          icon: '✓',
+          text: 'IP location acquired.'
+        });
+        debugLog('location', 'Locate success', {
+          mode: 'ip',
+          source: result.source,
+          requestId,
+          reason,
+          coordinates: { lat: point.lat, lon: point.lon }
+        });
+        return;
+      }
+
+      const failLabel = humanReadableLocateFailure(result);
+      setSettings((prev) => ({ ...prev, locationMode: 'ip' }));
+      setLocateStatus({ tone: 'error', icon: '✕', text: `${failLabel}. Keeping saved location.` });
+      debugLog('location', 'Locate failed', { mode: 'ip', result, requestId, reason });
     },
-    [beginLocate, endLocate, getIpLocation]
+    [getIpLocation]
   );
 
   const setLocationMode = useCallback(
@@ -142,25 +123,6 @@ export const useStartupSettings = (api: RendererApi) => {
     [locateIp, locateRandomCity]
   );
 
-  const runAutoLocate = useCallback(async (): Promise<void> => {
-    const requestId = locateRequestIdRef.current + 1;
-    locateRequestIdRef.current = requestId;
-    const currentMode = settings.locationMode;
-
-    if (currentMode === 'manual') {
-      setLocateStatus(modeReadyStatus('manual'));
-      debugLog('location', 'Skipping locate because manual mode is selected');
-      return;
-    }
-
-    if (currentMode === 'random') {
-      locateRandomCity(requestId);
-      return;
-    }
-
-    await locateIp(requestId, 'manual-refresh');
-  }, [locateIp, locateRandomCity, settings.locationMode]);
-
   const refreshFullscreen = useCallback(async (): Promise<void> => {
     setIsFullscreen(await api.getFullscreen());
   }, [api]);
@@ -176,8 +138,8 @@ export const useStartupSettings = (api: RendererApi) => {
     const load = async () => {
       try {
         const saved = await api.getSettings();
-        debugLog('startup', 'Loaded saved settings', saved);
         if (disposed) return;
+        debugLog('startup', 'Loaded saved settings', saved);
         setSettings(saved);
         setLocateStatus(modeReadyStatus(saved.locationMode));
         await refreshFullscreen();
@@ -206,8 +168,6 @@ export const useStartupSettings = (api: RendererApi) => {
     isFullscreen,
     hasBootstrapped,
     locateStatus,
-    isLocating,
-    runAutoLocate,
     toggleFullscreen
   };
 };

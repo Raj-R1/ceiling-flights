@@ -7,6 +7,7 @@ const api: RendererApi = {
   getSettings: () => ipcRenderer.invoke(IPC_CHANNELS.getSettings),
   setSettings: (settings: AppSettings) => ipcRenderer.invoke(IPC_CHANNELS.setSettings, settings),
   autoLocate: () => ipcRenderer.invoke(IPC_CHANNELS.autoLocate),
+  searchLocation: (query: string) => ipcRenderer.invoke(IPC_CHANNELS.searchLocation, query),
   fetchSnapshot: (center: GeoPoint, radiusKm: number) =>
     ipcRenderer.invoke(IPC_CHANNELS.fetchSnapshot, center, radiusKm),
   toggleFullscreen: () => ipcRenderer.invoke(IPC_CHANNELS.toggleFullscreen),

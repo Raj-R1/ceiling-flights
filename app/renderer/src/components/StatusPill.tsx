@@ -1,6 +1,6 @@
 import { Box, Divider, Group, Text, UnstyledButton } from '@mantine/core';
-import { GLASS_SURFACE_TOKENS } from '../theme/glassTokens';
 import type { ConnectionState } from '../../../shared/types';
+import { LiquidGlass } from './LiquidGlass';
 
 type Props = {
   connectionState: ConnectionState;
@@ -43,57 +43,45 @@ export function StatusPill({ connectionState, aircraftCount, locationLabel, pane
       left={12}
       style={{ zIndex: 100 }}
     >
-      <Group
-        gap={12}
-        wrap="nowrap"
-        align="center"
-        px={14}
-        py={9}
-        style={{
-          background: 'rgba(14, 17, 22, 0.76)',
-          border: `1px solid ${GLASS_SURFACE_TOKENS.borderStrong}`,
-          borderRadius: 9999,
-          backdropFilter: 'blur(12px) saturate(150%)',
-          WebkitBackdropFilter: 'blur(12px) saturate(150%)',
-          userSelect: 'none'
-        }}
-      >
-        <Box
-          w={9}
-          h={9}
-          style={{
-            borderRadius: '50%',
-            background: dotColor,
-            flexShrink: 0,
-            animation: dotState === 'refreshing' ? 'pulse-dot 1.4s ease-in-out infinite' : 'none'
-          }}
-        />
+      <LiquidGlass radius={9999} px={14} py={9} blur={3} style={{ userSelect: 'none' }}>
+        <Group gap={12} wrap="nowrap" align="center">
+          <Box
+            w={9}
+            h={9}
+            style={{
+              borderRadius: '50%',
+              background: dotColor,
+              flexShrink: 0,
+              animation: dotState === 'refreshing' ? 'pulse-dot 1.4s ease-in-out infinite' : 'none'
+            }}
+          />
 
-        <Text size="sm" c="dimmed" lh={1}>
-          {stateLabel}
-        </Text>
+          <Text size="sm" c="dimmed" lh={1}>
+            {stateLabel}
+          </Text>
 
-        <Divider orientation="vertical" h={16} />
+          <Divider orientation="vertical" h={16} />
 
-        <Text size="sm" c="gray.3" lh={1}>
-          {aircraftCount} aircraft
-        </Text>
+          <Text size="sm" c="gray.3" lh={1}>
+            {aircraftCount} aircraft
+          </Text>
 
-        {locationLabel ? (
-          <>
-            <Divider orientation="vertical" h={16} />
-            <Text size="sm" c="gray.4" lh={1} maw={220} truncate>
-              {locationLabel}
-            </Text>
-          </>
-        ) : null}
+          {locationLabel ? (
+            <>
+              <Divider orientation="vertical" h={16} />
+              <Text size="sm" c="gray.4" lh={1} maw={220} truncate>
+                {locationLabel}
+              </Text>
+            </>
+          ) : null}
 
-        <Divider orientation="vertical" h={16} />
+          <Divider orientation="vertical" h={16} />
 
-        <Text size="sm" c="dimmed" lh={1}>
-          {panelVisible ? '← Hide' : 'S · Settings'}
-        </Text>
-      </Group>
+          <Text size="sm" c="dimmed" lh={1}>
+            {panelVisible ? '← Hide' : 'S · Settings'}
+          </Text>
+        </Group>
+      </LiquidGlass>
     </UnstyledButton>
   );
 }

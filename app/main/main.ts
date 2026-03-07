@@ -5,7 +5,7 @@ import { getSettings, setSettings } from './settingsStore';
 import type { AppSettings, GeoPoint } from '../shared/types';
 import { fetchAdsbSnapshot } from './services/adsbService';
 import { createDiagnostics } from './services/diagnostics';
-import { autoLocateByIp } from './services/locationService';
+import { autoLocateByIp, searchLocationByQuery } from './services/locationService';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -70,6 +70,7 @@ const registerIpc = (): void => {
 
   ipcMain.handle(IPC_CHANNELS.setSettings, (_event, settings: AppSettings) => setSettings(settings));
   ipcMain.handle(IPC_CHANNELS.autoLocate, () => autoLocateByIp(debugMain));
+  ipcMain.handle(IPC_CHANNELS.searchLocation, (_event, query: string) => searchLocationByQuery(debugMain, query));
   ipcMain.handle(IPC_CHANNELS.fetchSnapshot, (_event, center: GeoPoint, radiusKm: number) =>
     fetchAdsbSnapshot(center, radiusKm)
   );

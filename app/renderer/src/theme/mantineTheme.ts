@@ -25,17 +25,24 @@ export const mantineTheme = createTheme({
     Modal: {
       styles: {
         content: {
-          background: 'rgba(16, 19, 24, 0.82)',
+          background: 'rgba(14, 17, 22, 0.38)',
           border: `1px solid ${GLASS_SURFACE_TOKENS.border}`,
-          backdropFilter: `blur(${GLASS_SURFACE_TOKENS.blurPanel}) saturate(150%)`,
-          WebkitBackdropFilter: `blur(${GLASS_SURFACE_TOKENS.blurPanel}) saturate(150%)`
+          borderRadius: RADIUS_TOKENS.card,
+          backdropFilter: 'blur(20px) saturate(180%) contrast(1.05)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%) contrast(1.05)',
+          overflow: 'hidden',
+          boxShadow: [
+            'inset 1px 1px 0 rgba(255, 255, 255, 0.14)',
+            'inset -1px -1px 0 rgba(255, 255, 255, 0.04)',
+            GLASS_SURFACE_TOKENS.shadow,
+          ].join(', ')
         },
         header: {
           background: 'transparent'
         },
         overlay: {
-          background: 'rgba(0, 0, 0, 0.55)',
-          backdropFilter: 'blur(2px)'
+          background: 'rgba(0, 0, 0, 0.45)',
+          backdropFilter: 'blur(3px)'
         }
       }
     }

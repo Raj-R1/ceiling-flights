@@ -8,17 +8,18 @@ import {
   Divider,
   Group,
   Kbd,
-  Paper,
   SegmentedControl,
   Slider,
   Stack,
   Switch,
   Text,
-  Transition
+  Transition,
 } from '@mantine/core';
+import { IconPencil, IconRefresh } from '@tabler/icons-react';
 import type { AppSettings, ConnectionState, GeoPoint } from '../../../shared/types';
 import type { LocateStatus } from '../hooks/useStartupSettings';
 import { LocationEditorModal } from './overlay';
+import { LiquidGlass } from './LiquidGlass';
 
 const ZOOM_MIN = 3;
 const ZOOM_MAX = 12;
@@ -102,7 +103,7 @@ export function ControlPanel({
   onToggleFullscreen,
   onLocationModeChange,
   onZoomChange,
-  onManualLocationApply
+  onManualLocationApply,
 }: Props) {
   const [locationEditorOpen, setLocationEditorOpen] = useState(false);
 
@@ -124,11 +125,16 @@ export function ControlPanel({
             top={14}
             left={14}
             w="min(332px, calc(100vw - 28px))"
-            mah="calc(100vh - 28px)"
-            style={{ zIndex: 200, overflowY: 'auto', ...styles }}
+            style={{ zIndex: 200, ...styles }}
           >
-            <Paper p="md" radius="lg">
-              <Stack gap="md">
+            {/*
+              Scroll container is INSIDE LiquidGlass (not on it) so that
+              overflow:hidden + border-radius clipping is not affected by the
+              backdrop-filter compositing layer.
+            */}
+            <LiquidGlass radius={18} blur={5}>
+              <Box p="md" style={{ maxHeight: 'calc(100vh - 28px)', overflowY: 'auto' }}>
+              <Stack gap={10}>
 
                 {/* ── Header ── */}
                 <Group justify="space-between" align="center" wrap="nowrap">
@@ -154,7 +160,7 @@ export function ControlPanel({
                 <Divider />
 
                 {/* ── Location ── */}
-                <Stack gap={10}>
+                <Stack gap={8}>
                   <SectionLabel
                     right={
                       <Text size="xs" c="dimmed" ff="monospace" lh={1} opacity={0.55}>
@@ -178,44 +184,62 @@ export function ControlPanel({
                     aria-label="Location mode"
                   />
 
-                  <Group justify="space-between" align="center" wrap="nowrap" gap="xs">
-                    {locateStatus.tone === 'neutral' ? (
-                      <Text size="xs" c="dimmed" lh={1.25}>
-                        {locateStatus.text}
-                      </Text>
-                    ) : (
-                      <Text size="xs" c={locateColor} lh={1.2}>
-                        {locateStatus.icon} {locateStatus.text}
-                      </Text>
-                    )}
-                    {settings.locationMode === 'manual' ? (
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
+                  <Group justify="space-between" align="center" wrap="nowrap" gap={8}>
+                    <Text
+                      size="xs"
+                      c={locateStatus.tone === 'neutral' ? 'dimmed' : locateColor}
+                      lh={1.25}
+                      style={{ flex: 1, minWidth: 0 }}
+                    >
+                      {locateStatus.tone !== 'neutral' ? `${locateStatus.icon} ` : ''}
+                      {locateStatus.text}
+                    </Text>
+
+                    {settings.locationMode === 'manual' && (
+                      <Button
+                        variant="default"
+                        radius="md"
                         size="xs"
-                        aria-label="Edit manual coordinates"
+                        leftSection={<IconPencil size={13} />}
                         onClick={() => setLocationEditorOpen(true)}
+                        aria-label="Edit manual coordinates"
                       >
-                        ✎
-                      </ActionIcon>
-                    ) : settings.locationMode === 'random' ? (
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
+                        Edit Location
+                      </Button>
+                    )}
+
+                    {settings.locationMode === 'random' && (
+                      <Button
+                        variant="default"
+                        radius="md"
                         size="xs"
-                        aria-label="Pick another random city"
+                        leftSection={<IconRefresh size={13} />}
                         onClick={() => onLocationModeChange('random')}
+                        aria-label="Pick another random city"
                       >
-                        ↻
-                      </ActionIcon>
-                    ) : null}
+                        New City
+                      </Button>
+                    )}
+
+                    {settings.locationMode === 'ip' && (
+                      <Button
+                        variant="default"
+                        radius="md"
+                        size="xs"
+                        leftSection={<IconRefresh size={13} />}
+                        onClick={() => onLocationModeChange('ip')}
+                        aria-label="Refresh IP location"
+                      >
+                        Refresh IP
+                      </Button>
+                    )}
                   </Group>
                 </Stack>
 
                 <Divider />
 
                 {/* ── View ── */}
-                <Stack gap={10}>
+                <Stack gap={8}>
                   <SectionLabel>View</SectionLabel>
 
                   <ControlRow label="Map tiles">
@@ -235,41 +259,43 @@ export function ControlPanel({
                       {settings.zoom}
                     </Text>
                   </ControlRow>
-                  <Slider
-                    value={settings.zoom}
-                    onChange={onZoomChange}
-                    min={ZOOM_MIN}
-                    max={ZOOM_MAX}
-                    step={1}
-                    marks={ZOOM_MARKS}
-                    color="white"
-                    size="sm"
-                    thumbSize={18}
-                    radius="xl"
-                    label={null}
-                    thumbChildren={
-                      <Box
-                        w={6}
-                        h={6}
-                        style={{
-                          borderRadius: '50%',
-                          background: '#ffffff',
-                          boxShadow: '0 0 0 1px rgba(0,0,0,0.18)'
-                        }}
-                      />
-                    }
-                    styles={{
-                      bar: { background: '#ffffff' },
-                      thumb: { display: 'flex', alignItems: 'center', justifyContent: 'center' }
-                    }}
-                    aria-label="Zoom"
-                  />
+                  <Box pb={8}>
+                    <Slider
+                      value={settings.zoom}
+                      onChange={onZoomChange}
+                      min={ZOOM_MIN}
+                      max={ZOOM_MAX}
+                      step={1}
+                      marks={ZOOM_MARKS}
+                      color="white"
+                      size="sm"
+                      thumbSize={18}
+                      radius="xl"
+                      label={null}
+                      thumbChildren={
+                        <Box
+                          w={6}
+                          h={6}
+                          style={{
+                            borderRadius: '50%',
+                            background: '#ffffff',
+                            boxShadow: '0 0 0 1px rgba(0,0,0,0.18)'
+                          }}
+                        />
+                      }
+                      styles={{
+                        bar: { background: '#ffffff' },
+                        thumb: { display: 'flex', alignItems: 'center', justifyContent: 'center' }
+                      }}
+                      aria-label="Zoom"
+                    />
+                  </Box>
                 </Stack>
 
                 <Divider />
 
                 {/* ── Display ── */}
-                <Stack gap={10}>
+                <Stack gap={8}>
                   <SectionLabel>Display</SectionLabel>
                   <Button fullWidth variant="default" size="xs" onClick={onToggleFullscreen}>
                     {isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
@@ -291,7 +317,8 @@ export function ControlPanel({
                 </Group>
 
               </Stack>
-            </Paper>
+              </Box>
+            </LiquidGlass>
           </Box>
         )}
       </Transition>

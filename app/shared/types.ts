@@ -17,6 +17,19 @@ export type LocationResult = {
   message?: string;
 };
 
+export type LocationSearchSource = 'nominatim' | 'none';
+
+export type LocationSearchErrorCode = LocationErrorCode | 'invalid-query' | 'not-found';
+
+export type LocationSearchResult = {
+  ok: boolean;
+  source: LocationSearchSource;
+  point?: GeoPoint;
+  displayName?: string;
+  errorCode?: LocationSearchErrorCode;
+  message?: string;
+};
+
 export type AircraftSnapshot = {
   id: string;
   callsign?: string;

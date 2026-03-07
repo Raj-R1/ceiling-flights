@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Transition } from '@mantine/core';
 import { DEFAULT_SETTINGS } from '../../shared/defaults';
 import type { RendererApi } from '../../shared/ipc';
+import type { AppSettings, GeoPoint } from '../../shared/types';
 import { FlightMap } from './components/FlightMap';
 import { StatusPill } from './components/StatusPill';
 import { ControlPanel } from './components/ControlPanel';
@@ -21,9 +22,42 @@ const fallbackApi: RendererApi = {
   getSettings: async () => DEFAULT_SETTINGS,
   setSettings: async (settings) => settings,
   autoLocate: async () => ({ ok: false, source: 'none', errorCode: 'unknown', message: 'Bridge unavailable' }),
+  searchLocation: async () => ({
+    ok: false,
+    source: 'none',
+    errorCode: 'network',
+    message: 'Bridge unavailable'
+  }),
   fetchSnapshot: async () => [],
   toggleFullscreen: async () => false,
   getFullscreen: async () => false
+};
+
+const isFn = <TArgs extends unknown[], TReturn>(
+  value: unknown
+): value is (...args: TArgs) => Promise<TReturn> => typeof value === 'function';
+
+const resolveApi = (): RendererApi => {
+  const bridge = window.ceilingFlights as Partial<RendererApi> | undefined;
+  if (!bridge) return fallbackApi;
+
+  return {
+    getSettings: isFn<[], AppSettings>(bridge.getSettings) ? bridge.getSettings : fallbackApi.getSettings,
+    setSettings: isFn<[AppSettings], AppSettings>(bridge.setSettings) ? bridge.setSettings : fallbackApi.setSettings,
+    autoLocate: isFn<[], Awaited<ReturnType<RendererApi['autoLocate']>>>(bridge.autoLocate)
+      ? bridge.autoLocate
+      : fallbackApi.autoLocate,
+    searchLocation: isFn<[string], Awaited<ReturnType<RendererApi['searchLocation']>>>(bridge.searchLocation)
+      ? bridge.searchLocation
+      : fallbackApi.searchLocation,
+    fetchSnapshot: isFn<[GeoPoint, number], Awaited<ReturnType<RendererApi['fetchSnapshot']>>>(bridge.fetchSnapshot)
+      ? bridge.fetchSnapshot
+      : fallbackApi.fetchSnapshot,
+    toggleFullscreen: isFn<[], boolean>(bridge.toggleFullscreen)
+      ? bridge.toggleFullscreen
+      : fallbackApi.toggleFullscreen,
+    getFullscreen: isFn<[], boolean>(bridge.getFullscreen) ? bridge.getFullscreen : fallbackApi.getFullscreen
+  };
 };
 
 export default function App() {
@@ -31,7 +65,7 @@ export default function App() {
   const [introVisible, setIntroVisible] = useState(false);
   const [isLocationSnapshotPending, setLocationSnapshotPending] = useState(true);
 
-  const api = window.ceilingFlights ?? fallbackApi;
+  const api = useMemo(resolveApi, []);
 
   const {
     settings,
