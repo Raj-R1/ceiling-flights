@@ -60,3 +60,23 @@ export type ConnectionState = {
   lastSuccessMs?: number;
   lastError?: string;
 };
+
+export type UpdateInfo = {
+  currentVersion: string;
+  latestVersion: string;
+  releaseName: string;
+  releaseUrl: string;
+  publishedAt?: string;
+  body: string;
+  isPrerelease: boolean;
+  isBeta: boolean;
+};
+
+export type UpdateCheckResult = {
+  currentVersion: string;
+  update: UpdateInfo | null;
+};
+
+export type UpdaterState = {
+  skippedVersion?: string;
+};

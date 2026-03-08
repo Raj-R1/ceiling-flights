@@ -1,11 +1,12 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'node:path';
 import { IPC_CHANNELS } from '../shared/ipc';
-import { getSettings, setSettings } from './settingsStore';
+import { getSettings, getUpdaterState, setSettings, setSkippedUpdateVersion } from './settingsStore';
 import type { AppSettings, GeoPoint } from '../shared/types';
 import { fetchAdsbSnapshot } from './services/adsbService';
 import { createDiagnostics } from './services/diagnostics';
 import { autoLocateByIp, searchLocationByQuery } from './services/locationService';
+import { checkForAppUpdate } from './services/updateService';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -84,6 +85,19 @@ const registerIpc = (): void => {
   });
 
   ipcMain.handle(IPC_CHANNELS.getFullscreen, () => !!mainWindow?.isFullScreen());
+  ipcMain.handle(IPC_CHANNELS.checkForUpdate, () => {
+    const updaterState = getUpdaterState();
+    return checkForAppUpdate(debugMain, updaterState.skippedVersion);
+  });
+  ipcMain.handle(IPC_CHANNELS.skipUpdate, (_event, version: string) => {
+    setSkippedUpdateVersion(version);
+  });
+  ipcMain.handle(IPC_CHANNELS.openUpdateUrl, async (_event, url: string) => {
+    if (typeof url !== 'string' || !/^https:\/\/github\.com\/Raj-R1\/ceiling-flights\/releases/i.test(url)) {
+      throw new Error('Refusing to open unknown update URL');
+    }
+    await shell.openExternal(url);
+  });
 };
 
 app.whenReady().then(async () => {

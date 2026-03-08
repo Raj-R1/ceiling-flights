@@ -1,6 +1,6 @@
 {
   "name": "ceiling-flights",
-  "version": "0.1.0",
+  "version": "0.2.0-beta.1",
   "description": "Ambient overhead flights display for projector setups",
   "main": "dist/main/main/index.js",
   "author": "",
@@ -17,9 +17,12 @@
     "lint": "eslint . --ext .ts,.tsx",
     "test": "vitest run",
     "test:watch": "vitest",
+    "update:test:stage": "node scripts/manage-update-override.mjs stage",
+    "update:test:clear": "node scripts/manage-update-override.mjs clear",
     "clean": "rimraf dist out",
     "package:mac": "pnpm build && electron-builder --mac",
     "package:win": "pnpm build && electron-builder --win",
+    "package:win:x64:portable": "pnpm build && electron-builder --win portable --x64",
     "package:linux": "pnpm build && electron-builder --linux"
   },
   "dependencies": {

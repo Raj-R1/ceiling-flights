@@ -11,7 +11,10 @@ const api: RendererApi = {
   fetchSnapshot: (center: GeoPoint, radiusKm: number) =>
     ipcRenderer.invoke(IPC_CHANNELS.fetchSnapshot, center, radiusKm),
   toggleFullscreen: () => ipcRenderer.invoke(IPC_CHANNELS.toggleFullscreen),
-  getFullscreen: () => ipcRenderer.invoke(IPC_CHANNELS.getFullscreen)
+  getFullscreen: () => ipcRenderer.invoke(IPC_CHANNELS.getFullscreen),
+  checkForUpdate: () => ipcRenderer.invoke(IPC_CHANNELS.checkForUpdate),
+  skipUpdate: (version: string) => ipcRenderer.invoke(IPC_CHANNELS.skipUpdate, version),
+  openUpdateUrl: (url: string) => ipcRenderer.invoke(IPC_CHANNELS.openUpdateUrl, url)
 };
 
 contextBridge.exposeInMainWorld('ceilingFlights', api);

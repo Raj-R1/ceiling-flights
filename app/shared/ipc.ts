@@ -3,7 +3,8 @@ import type {
   AppSettings,
   GeoPoint,
   LocationResult,
-  LocationSearchResult
+  LocationSearchResult,
+  UpdateCheckResult
 } from './types';
 
 export const IPC_CHANNELS = {
@@ -13,7 +14,10 @@ export const IPC_CHANNELS = {
   searchLocation: 'location:search',
   fetchSnapshot: 'flights:fetch-snapshot',
   toggleFullscreen: 'window:toggle-fullscreen',
-  getFullscreen: 'window:get-fullscreen'
+  getFullscreen: 'window:get-fullscreen',
+  checkForUpdate: 'app:check-for-update',
+  skipUpdate: 'app:skip-update',
+  openUpdateUrl: 'app:open-update-url'
 } as const;
 
 export type RendererApi = {
@@ -24,4 +28,7 @@ export type RendererApi = {
   fetchSnapshot: (center: GeoPoint, radiusKm: number) => Promise<AircraftSnapshot[]>;
   toggleFullscreen: () => Promise<boolean>;
   getFullscreen: () => Promise<boolean>;
+  checkForUpdate: () => Promise<UpdateCheckResult>;
+  skipUpdate: (version: string) => Promise<void>;
+  openUpdateUrl: (url: string) => Promise<void>;
 };

@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Transition } from '@mantine/core';
 import { DEFAULT_SETTINGS } from '../../shared/defaults';
 import type { RendererApi } from '../../shared/ipc';
-import type { AppSettings, GeoPoint } from '../../shared/types';
+import type { AppSettings, GeoPoint, UpdateInfo } from '../../shared/types';
 import { FlightMap } from './components/FlightMap';
 import { StatusPill } from './components/StatusPill';
 import { ControlPanel } from './components/ControlPanel';
+import { UpdateModal } from './components/overlay';
 import { useStartupSettings } from './hooks/useStartupSettings';
 import { useMapToggleLock } from './hooks/useMapToggleLock';
 import { useFlightPolling } from './hooks/useFlightPolling';
@@ -30,7 +31,10 @@ const fallbackApi: RendererApi = {
   }),
   fetchSnapshot: async () => [],
   toggleFullscreen: async () => false,
-  getFullscreen: async () => false
+  getFullscreen: async () => false,
+  checkForUpdate: async () => ({ currentVersion: '0.0.0', update: null }),
+  skipUpdate: async () => {},
+  openUpdateUrl: async () => {}
 };
 
 const isFn = <TArgs extends unknown[], TReturn>(
@@ -56,7 +60,16 @@ const resolveApi = (): RendererApi => {
     toggleFullscreen: isFn<[], boolean>(bridge.toggleFullscreen)
       ? bridge.toggleFullscreen
       : fallbackApi.toggleFullscreen,
-    getFullscreen: isFn<[], boolean>(bridge.getFullscreen) ? bridge.getFullscreen : fallbackApi.getFullscreen
+    getFullscreen: isFn<[], boolean>(bridge.getFullscreen) ? bridge.getFullscreen : fallbackApi.getFullscreen,
+    checkForUpdate: isFn<[], Awaited<ReturnType<RendererApi['checkForUpdate']>>>(bridge.checkForUpdate)
+      ? bridge.checkForUpdate
+      : fallbackApi.checkForUpdate,
+    skipUpdate: isFn<[string], Awaited<ReturnType<RendererApi['skipUpdate']>>>(bridge.skipUpdate)
+      ? bridge.skipUpdate
+      : fallbackApi.skipUpdate,
+    openUpdateUrl: isFn<[string], Awaited<ReturnType<RendererApi['openUpdateUrl']>>>(bridge.openUpdateUrl)
+      ? bridge.openUpdateUrl
+      : fallbackApi.openUpdateUrl
   };
 };
 
@@ -64,6 +77,8 @@ export default function App() {
   const [showPanel, setShowPanel] = useState(true);
   const [introVisible, setIntroVisible] = useState(false);
   const [isLocationSnapshotPending, setLocationSnapshotPending] = useState(true);
+  const [availableUpdate, setAvailableUpdate] = useState<UpdateInfo | null>(null);
+  const [isUpdateModalOpen, setUpdateModalOpen] = useState(false);
 
   const api = useMemo(resolveApi, []);
 
@@ -109,6 +124,34 @@ export default function App() {
     const id = window.setTimeout(() => setIntroVisible(true), 240);
     return () => window.clearTimeout(id);
   }, []);
+
+  useEffect(() => {
+    if (!hasBootstrapped) return;
+
+    let disposed = false;
+
+    const loadUpdate = async () => {
+      try {
+        const result = await api.checkForUpdate();
+        if (disposed || !result.update) return;
+
+        debugLog('startup', 'Update available', {
+          currentVersion: result.currentVersion,
+          latestVersion: result.update.latestVersion
+        });
+        setAvailableUpdate(result.update);
+        setUpdateModalOpen(true);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown update-check error';
+        debugLog('startup', 'Update check failed', { message });
+      }
+    };
+
+    void loadUpdate();
+    return () => {
+      disposed = true;
+    };
+  }, [api, hasBootstrapped]);
 
   // Global keyboard shortcuts.
   useEffect(() => {
@@ -218,6 +261,21 @@ export default function App() {
           onTogglePanel={() => setShowPanel((prev) => !prev)}
         />
       ) : null}
+
+      <UpdateModal
+        opened={isUpdateModalOpen && availableUpdate !== null}
+        update={availableUpdate}
+        onLater={() => setUpdateModalOpen(false)}
+        onSkipVersion={(version) => {
+          void api.skipUpdate(version);
+          setUpdateModalOpen(false);
+        }}
+        onUpdate={() => {
+          if (!availableUpdate) return;
+          void api.openUpdateUrl(availableUpdate.releaseUrl);
+          setUpdateModalOpen(false);
+        }}
+      />
     </Box>
   );
 }
